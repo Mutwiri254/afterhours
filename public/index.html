@@ -30,15 +30,41 @@
     opacity: 0.7;
     letter-spacing: 0.3px;
   }
+
+  #presence {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.dot {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background-color: rgba(200, 200, 200, 0.6);
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 2s ease;
+}
+
+.dot.visible {
+  opacity: 1;
+}
+
 </style>
   </head>
   <body>
     <div id="bar">
-      <p>You’ve entered AfterHours.</p>
-    </div>
+       <p>You’ve entered AfterHours.</p>
+       <div id="presence"></div>
+  </div>
 
 
-    <script src="../src/main.js"></script>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/main.js"></script>
+
+
 
   </body>
 </html>
