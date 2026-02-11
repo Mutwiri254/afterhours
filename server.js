@@ -8,15 +8,21 @@ const io = new Server(server);
 
 app.use(express.static("public"));
 
-let peopleInBar = 0;
+let peers = {};
 
 io.on("connection", (socket) => {
-  peopleInBar++;
-  io.emit("presence", peopleInBar);
+  peers[socket.id] = { x: 50, y: 50 };
+
+  io.emit("peers", peers);
+
+  socket.on("move", (position) => {
+    peers[socket.id] = position;
+    io.emit("peers", peers);
+  });
 
   socket.on("disconnect", () => {
-    peopleInBar--;
-    io.emit("presence", peopleInBar);
+    delete peers[socket.id];
+    io.emit("peers", peers);
   });
 });
 
