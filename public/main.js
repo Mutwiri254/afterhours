@@ -2,9 +2,38 @@ console.log("Attempting socket connection...");
 
 console.log("AfterHours is open.");
 
-const ambience = new Audio("/assets/ambience.mp3");
-ambience.loop = true;
-ambience.volume = 0.3;
+// --- Web Audio Setup ---
+let audioContext;
+let ambienceBuffer;
+let ambienceSource;
+let gainNode;
+let panNode;
+
+const baseVolume = 0.3;
+
+async function setupAudio() {
+  audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+  const response = await fetch("/assets/ambience.mp3");
+  const arrayBuffer = await response.arrayBuffer();
+  ambienceBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+  ambienceSource = audioContext.createBufferSource();
+  ambienceSource.buffer = ambienceBuffer;
+  ambienceSource.loop = true;
+
+  gainNode = audioContext.createGain();
+  gainNode.gain.value = baseVolume;
+
+  panNode = audioContext.createStereoPanner();
+
+  ambienceSource.connect(panNode);
+  panNode.connect(gainNode);
+  gainNode.connect(audioContext.destination);
+
+  ambienceSource.start();
+}
+
 
 const socket = io();
 const presenceContainer = document.getElementById("presence");
@@ -71,9 +100,13 @@ window.addEventListener("load", () => {
   document.body.classList.add("visible");
 });
 
-document.addEventListener("click", () => {
-  if (ambience.paused) {
-    ambience.play();
+document.addEventListener("click", async () => {
+  if (!audioContext) {
+    await setupAudio();
+  }
+
+  if (audioContext.state === "suspended") {
+    audioContext.resume();
   }
 });
 
@@ -111,13 +144,24 @@ function animate() {
   myPosition.x += (myTarget.x - myPosition.x) * slowedSpeed;
   myPosition.y += (myTarget.y - myPosition.y) * slowedSpeed;
 
+  // --- Spatial Panning Based on Position ---
+if (panNode) {
+  const normalizedX = (myPosition.x - 50) / 50; 
+  // Converts 0–100 into -1 to +1
+
+  const smoothedPan =
+    panNode.pan.value + (normalizedX - panNode.pan.value) * 0.05;
+
+  panNode.pan.value = smoothedPan;
+}
+
   // Emit your smoothed position
   socket.emit("move", myPosition);
 
   // --- Smooth peer movement ---
   Object.values(peers).forEach(peer => {
 
-    // IMPORTANT: You forgot to update peer.x and peer.y interpolation
+    
     peer.x += (peer.targetX - peer.x) * 0.08;
     peer.y += (peer.targetY - peer.y) * 0.08;
 
@@ -139,6 +183,32 @@ function animate() {
     peer.element.style.top = `${peer.y + idleY}%`;
     peer.element.style.transform = `scale(${scale})`;
   });
+
+  // --- Calculate overall proximity intensity ---
+let overallProximity = 0;
+
+Object.values(peers).forEach(peer => {
+  const dx = peer.x - myPosition.x;
+  const dy = peer.y - myPosition.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+
+  const p = Math.max(0, 1 - dist / 40);
+
+  if (p > overallProximity) {
+    overallProximity = p;
+  }
+});
+
+// --- Adjust ambient volume gently ---
+const intimacyReduction = overallProximity * 0.15;
+const targetVolume = Math.max(0.05, baseVolume - intimacyReduction);
+
+// Smooth volume change
+if (gainNode) {
+  gainNode.gain.value += (targetVolume - gainNode.gain.value) * 0.05;
+}
+
+
 
   requestAnimationFrame(animate);
 }
