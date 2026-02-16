@@ -8,6 +8,8 @@ let ambienceBuffer;
 let ambienceSource;
 let gainNode;
 let panNode;
+let filterNode;
+
 
 const baseVolume = 0.3;
 
@@ -22,12 +24,17 @@ async function setupAudio() {
   ambienceSource.buffer = ambienceBuffer;
   ambienceSource.loop = true;
 
+  filterNode = audioContext.createBiquadFilter();
+  filterNode.type = "lowpass";
+  filterNode.frequency.value = 12000; // start fairly open
+ 
   gainNode = audioContext.createGain();
   gainNode.gain.value = baseVolume;
 
   panNode = audioContext.createStereoPanner();
 
-  ambienceSource.connect(panNode);
+  ambienceSource.connect(filterNode);
+  filterNode.connect(panNode);
   panNode.connect(gainNode);
   gainNode.connect(audioContext.destination);
 
@@ -153,6 +160,24 @@ if (panNode) {
     panNode.pan.value + (normalizedX - panNode.pan.value) * 0.05;
 
   panNode.pan.value = smoothedPan;
+}
+
+// --- Edge Softening ---
+if (filterNode) {
+  const distanceFromCenter =
+    Math.sqrt(
+      Math.pow(myPosition.x - 50, 2) +
+      Math.pow(myPosition.y - 50, 2)
+    ) / 70; // normalize
+
+  const edgeFactor = Math.min(distanceFromCenter, 1);
+
+  // Center = warmer (lower frequency)
+  // Edges = brighter (higher frequency)
+  const targetFreq = 6500 + edgeFactor * 7500;
+
+  filterNode.frequency.value +=
+    (targetFreq - filterNode.frequency.value) * 0.03;
 }
 
   // Emit your smoothed position
